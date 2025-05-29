@@ -40,53 +40,40 @@ public class S3Service {
     @Value("${cloud.aws.s3.bucket}")
     private String bucketName;
     
-    private final String DIR_NAME = "s3_data";
+    @Value("${file.upload-dir}")
+    private String savePath;
     
-    // 파일 업로드
-	@Transactional
-	public void uploadS3File(MultipartFile file) throws Exception {
-		
-		
-		// C://dev//eclipseWork//CE//98.data//s3_data에 파일 저장 -> S3 전송 및 저장 (putObject)
-		if(file == null) {
-			throw new Exception("파일 전달 오류 발생");
-		}
-		
-		// DB 저장
-		String savePath = "C://dev//eclipseWork//CE//98.data//" + DIR_NAME;
-		String attachmentOriginalFileName = file.getOriginalFilename();
-		UUID uuid = UUID.randomUUID();
-		String attachmentFileName = uuid.toString()+"_"+file.getOriginalFilename();
-		Long attachmentFileSize = file.getSize();
-		
-		//Entity 변환
-		AttachmentFile attachmentFile = AttachmentFile.builder()
-				.attachmentFileName(attachmentFileName)
-				.attachmentOriginalFileName(attachmentOriginalFileName)
-				.filePath(savePath)
-				.attachmentFileSize(attachmentFileSize)
-				.build();
-		
-		Long fileNo = fileRepository.save(attachmentFile).getAttachmentFileNo();
-		
-		//S3 물리적으로 저장
-		if(fileNo != null) {
-			//서버에서 반드시 임시파일 활용해야하는 부분
-			File uploadFile = tempFileSave(file, attachmentFileName, attachmentFile);
-			
-			transferFileS3(uploadFile);
-			
-			//임시파일 삭제 -> 과부화 막기
-			if(uploadFile.exists()) {
-				uploadFile.delete();
-			}
-			
-			
-			
-		}
-		
-		
-	}
+    private final String DIR_NAME = "s3_data";
+
+    
+    @Transactional
+    public void uploadS3File(MultipartFile file) throws Exception {
+        if(file == null) {
+            throw new Exception("파일 전달 오류 발생");
+        }
+
+        String attachmentOriginalFileName = file.getOriginalFilename();
+        UUID uuid = UUID.randomUUID();
+        String attachmentFileName = uuid.toString()+"_"+attachmentOriginalFileName;
+        Long attachmentFileSize = file.getSize();
+
+        AttachmentFile attachmentFile = AttachmentFile.builder()
+            .attachmentFileName(attachmentFileName)
+            .attachmentOriginalFileName(attachmentOriginalFileName)
+            .filePath(savePath)
+            .attachmentFileSize(attachmentFileSize)
+            .build();
+
+        Long fileNo = fileRepository.save(attachmentFile).getAttachmentFileNo();
+
+        if(fileNo != null) {
+            File uploadFile = tempFileSave(file, attachmentFileName, attachmentFile);
+            transferFileS3(uploadFile);
+            if(uploadFile.exists()) {
+                uploadFile.delete();
+            }
+        }
+    }
 
 	private void transferFileS3(File uploadFile) {
 		//S3 파일 전송
@@ -99,13 +86,12 @@ public class S3Service {
 	}
 
 	
-	private File tempFileSave(MultipartFile file, String attachmentFileName, AttachmentFile attachmentFile)
-			throws IOException {
-		//임시 파일 저장
-		File uploadFile = new File(attachmentFile.getFilePath() + "//" + attachmentFileName);
-		file.transferTo(uploadFile);
-		return uploadFile;
-	}
+    private File tempFileSave(MultipartFile file, String attachmentFileName, AttachmentFile attachmentFile)
+            throws IOException {
+        File uploadFile = new File(savePath + "/" + attachmentFileName);
+        file.transferTo(uploadFile);
+        return uploadFile;
+    }
 	
 	
 	
